@@ -1,4 +1,4 @@
-# Pocket Transcripts Skill
+# heypocket-reader
 
 A Claude Code skill for reading transcripts and summaries from [Pocket AI](https://heypocket.com) recording devices.
 
@@ -23,8 +23,7 @@ Download the `.skill` file from [Releases](../../releases) and add it to your Cl
 ### Manual Installation
 
 ```bash
-# Clone to your skills directory
-git clone https://github.com/YOUR_USERNAME/heypocket-reader.git ~/.claude/skills/pocket-transcripts
+git clone https://github.com/tmustier/heypocket-reader.git ~/.claude/skills/heypocket-reader
 ```
 
 ## Setup
@@ -32,29 +31,28 @@ git clone https://github.com/YOUR_USERNAME/heypocket-reader.git ~/.claude/skills
 ### Prerequisites
 
 1. A Pocket account with recordings
-2. The [browser skill](https://github.com/anthropics/skills/tree/main/skills/browser) installed
+2. Browser automation capability (Chrome DevTools Protocol)
 3. Chrome browser
 
 ### Authentication
 
 Pocket uses Firebase authentication. To extract your token:
 
-1. Start Chrome with your profile:
+1. Start Chrome with remote debugging enabled (port 9222) and your user profile
+2. Navigate to https://app.heypocket.com and log in
+3. Run the token extraction:
    ```bash
-   ~/.claude/skills/browser/start.js --profile
-   ```
-
-2. Navigate to Pocket and log in:
-   ```bash
-   ~/.claude/skills/browser/nav.js https://app.heypocket.com
-   ```
-
-3. Extract the token:
-   ```bash
-   python3 ~/.claude/skills/pocket-transcripts/scripts/reader.py extract
+   python3 ~/.claude/skills/heypocket-reader/scripts/reader.py extract
    ```
 
 The token is saved to `~/.pocket_token.json` and expires in 1 hour.
+
+#### Browser Automation Note
+
+The `extract` command requires a browser automation tool that can evaluate JavaScript in Chrome via CDP (Chrome DevTools Protocol). If you have a browser skill installed, use it to:
+1. Start Chrome with `--remote-debugging-port=9222` and your profile
+2. Navigate to app.heypocket.com
+3. Then run the extract command
 
 ## Usage
 
