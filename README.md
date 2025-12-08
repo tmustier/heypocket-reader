@@ -24,7 +24,7 @@ Download the `.skill` file from [Releases](../../releases) and add it to your Cl
 
 ```bash
 # Clone to your skills directory
-git clone https://github.com/YOUR_USERNAME/pocket-transcripts-skill.git ~/.claude/skills/pocket-transcripts
+git clone https://github.com/YOUR_USERNAME/heypocket-reader.git ~/.claude/skills/pocket-transcripts
 ```
 
 ## Setup

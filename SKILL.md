@@ -1,5 +1,5 @@
 ---
-name: pocket-transcripts
+name: heypocket-reader
 description: Read transcripts and summaries from Pocket AI (heypocket.com) recording devices. Use when users want to retrieve, search, or analyze their Pocket recordings, transcripts, summaries, or action items. Triggers on requests involving Pocket device data, conversation transcripts, meeting recordings, or audio note retrieval.
 ---
 
