@@ -13,7 +13,7 @@ Access Pocket AI recordings via reverse-engineered API.
 |----------|-------------|
 | `get_recordings(days, limit)` | List recent recordings |
 | `get_recording_full(id)` | Get transcript + summary + action items + speakers |
-| `search_recordings(query, lat, lon, radius_km)` | Search by text and/or location |
+| `search_recordings(query, lat, lon, radius_km)` | Search by title/description/tags and/or location |
 
 ## Setup
 
@@ -39,14 +39,14 @@ full['summary']       # Markdown
 full['action_items']  # List
 full['speakers']      # Dict with speaker profiles
 
-# Search by text
+# Search by title/description/tags
 search_recordings(query="meeting")
 
-# Search by location (1km radius)
-search_recordings(lat=51.51, lon=-0.13, radius_km=1)
+# Search by location
+search_recordings(lat=51.51, lon=-0.13, radius_km=25)
 
 # Combined
-search_recordings(query="AI", lat=51.51, lon=-0.13, radius_km=50)
+search_recordings(query="AI", lat=51.51, lon=-0.13, radius_km=25)
 ```
 
 ## Transcript Search

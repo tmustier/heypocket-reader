@@ -8,7 +8,7 @@ Access transcripts and summaries from [Pocket AI](https://heypocket.com) recordi
 - **Get full transcripts** (50k+ characters)
 - **Get AI summaries** in markdown format
 - **Extract action items** and **speaker profiles**
-- **Search recordings** by text and/or location
+- **Search recordings** by title/description/tags and/or location
 
 ## Installation
 
@@ -74,7 +74,7 @@ full['summary']       # Markdown
 full['action_items']  # List
 full['speakers']      # Dict with speaker profiles (names, IDs)
 
-# Search by text
+# Search by title/description/tags
 search_recordings(query="meeting")
 
 # Search by location
@@ -90,7 +90,7 @@ search_recordings(query="AI", lat=51.51, lon=-0.13, radius_km=50)
 |----------|-------------|
 | `get_recordings(days, limit)` | List recent recordings |
 | `get_recording_full(id)` | Get transcript + summary + action items + speakers |
-| `search_recordings(query, lat, lon, radius_km)` | Search by text and/or location |
+| `search_recordings(query, lat, lon, radius_km)` | Search by title/description/tags and/or location |
 
 ## Transcript Search
 
