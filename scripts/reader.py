@@ -239,22 +239,33 @@ def get_summarization(recording_id: str, token: str = None) -> Optional[PocketSu
 
 
 def search_recordings(query: str, days: int = 90, limit: int = 20, token: str = None) -> List[PocketRecording]:
-    """Search recordings by text."""
+    """Search recordings by text (client-side filtering on title, description, tags)."""
     token = token or get_token()
     if not token:
         raise Exception("No token available.")
     
     start_date = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
     params = {
-        'limit': limit,
-        'search': query,
+        'limit': 100,  # Fetch more to filter locally
         'start_date': start_date,
         'sort_by': 'recording_at',
         'sort_order': 'desc',
     }
     
     data = _api_request('/recordings', token, params)
-    return [PocketRecording.from_api(r) for r in data.get('data', [])]
+    all_recordings = [PocketRecording.from_api(r) for r in data.get('data', [])]
+    
+    # Client-side search on title, description, tags
+    query_lower = query.lower()
+    matches = []
+    for r in all_recordings:
+        searchable = f"{r.title} {r.description} {' '.join(r.tags or [])}".lower()
+        if query_lower in searchable:
+            matches.append(r)
+            if len(matches) >= limit:
+                break
+    
+    return matches
 
 
 def extract_token_from_browser() -> Optional[str]:
