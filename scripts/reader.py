@@ -238,15 +238,50 @@ def get_summarization(recording_id: str, token: str = None) -> Optional[PocketSu
     )
 
 
-def search_recordings(query: str, days: int = 90, limit: int = 20, token: str = None) -> List[PocketRecording]:
-    """Search recordings by text (client-side filtering on title, description, tags)."""
+def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Calculate distance in km between two lat/lon points."""
+    from math import radians, sin, cos, sqrt, atan2
+    R = 6371  # Earth radius in km
+    lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
+    dlat = lat2 - lat1
+    dlon = lon2 - lon1
+    a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
+    return R * 2 * atan2(sqrt(a), sqrt(1-a))
+
+
+def search_recordings(
+    query: str = None,
+    days: int = 90,
+    limit: int = 20,
+    lat: float = None,
+    lon: float = None,
+    radius_km: float = 1.0,
+    token: str = None
+) -> List[PocketRecording]:
+    """
+    Search recordings with client-side filtering.
+    
+    Filters on: title, description, tags. Location optional.
+    
+    For transcript search: use get_recording_full() per recording - expensive but possible.
+    
+    Args:
+        query: Text to search in title/description/tags (optional if using location)
+        days: How far back to search
+        limit: Max results to return
+        lat/lon: Filter by location (requires both)
+        radius_km: Radius for location filter (default 1km)
+    """
     token = token or get_token()
     if not token:
         raise Exception("No token available.")
     
+    if not query and not (lat and lon):
+        raise ValueError("Provide query and/or lat+lon")
+    
     start_date = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
     params = {
-        'limit': 100,  # Fetch more to filter locally
+        'limit': 100,
         'start_date': start_date,
         'sort_by': 'recording_at',
         'sort_order': 'desc',
@@ -255,15 +290,26 @@ def search_recordings(query: str, days: int = 90, limit: int = 20, token: str = 
     data = _api_request('/recordings', token, params)
     all_recordings = [PocketRecording.from_api(r) for r in data.get('data', [])]
     
-    # Client-side search on title, description, tags
-    query_lower = query.lower()
+    query_lower = query.lower() if query else None
     matches = []
+    
     for r in all_recordings:
-        searchable = f"{r.title} {r.description} {' '.join(r.tags or [])}".lower()
-        if query_lower in searchable:
-            matches.append(r)
-            if len(matches) >= limit:
-                break
+        # Location filter
+        if lat and lon:
+            if not (r.latitude and r.longitude):
+                continue
+            if _haversine_km(lat, lon, r.latitude, r.longitude) > radius_km:
+                continue
+        
+        # Text filter
+        if query_lower:
+            searchable = f"{r.title} {r.description} {' '.join(r.tags or [])}".lower()
+            if query_lower not in searchable:
+                continue
+        
+        matches.append(r)
+        if len(matches) >= limit:
+            break
     
     return matches
 

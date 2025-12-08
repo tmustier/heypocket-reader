@@ -1,26 +1,18 @@
 # heypocket-reader
 
-A Claude Code skill for reading transcripts and summaries from [Pocket AI](https://heypocket.com) recording devices.
-
-## What is Pocket?
-
-Pocket is an AI-powered wearable device that records conversations and generates transcripts, summaries, and action items. This skill provides programmatic access to your Pocket data via their unofficial API.
+Access transcripts and summaries from [Pocket AI](https://heypocket.com) recording devices.
 
 ## Features
 
-- **List recordings** with metadata (title, duration, date, speakers)
-- **Get full transcripts** of recorded conversations (50k+ characters)
+- **List recordings** with metadata (title, duration, date, location, speakers)
+- **Get full transcripts** (50k+ characters)
 - **Get AI summaries** in markdown format
-- **Extract action items** from recordings
-- **Search recordings** by text
+- **Extract action items** and **speaker profiles**
+- **Search recordings** by text and/or location
 
 ## Installation
 
-### For Claude Code Users
-
-Download the `.skill` file from [Releases](../../releases) and add it to your Claude Code skills.
-
-### Manual Installation
+Download the `.skill` file from [Releases](../../releases) or:
 
 ```bash
 git clone https://github.com/tmustier/heypocket-reader.git ~/.claude/skills/heypocket-reader
@@ -28,82 +20,68 @@ git clone https://github.com/tmustier/heypocket-reader.git ~/.claude/skills/heyp
 
 ## Setup
 
-### Prerequisites
+### 1. Start Chrome with Remote Debugging
 
-1. A Pocket account with recordings
-2. Chrome browser
-3. A way to start Chrome with remote debugging (see examples below)
-
-### Step 1: Start Chrome with Remote Debugging
-
-Choose one of these methods:
-
-**Manual (macOS):**
+**macOS:**
 ```bash
 /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
   --remote-debugging-port=9222 \
   --user-data-dir="$HOME/chrome-debug-profile"
 ```
 
-**Manual (Linux):**
+**Linux:**
 ```bash
 google-chrome --remote-debugging-port=9222 --user-data-dir="$HOME/chrome-debug-profile"
 ```
 
-**Using Puppeteer:**
+**Puppeteer:**
 ```bash
 npx puppeteer browsers install chrome
 node -e "require('puppeteer').launch({headless: false, args: ['--remote-debugging-port=9222']})"
 ```
 
-**Using Playwright:**
+**Playwright:**
 ```bash
 npx playwright install chromium
 npx playwright open --remote-debugging-port=9222 https://app.heypocket.com
 ```
 
-### Step 2: Log into Pocket
+### 2. Log into Pocket
 
-Navigate to https://app.heypocket.com in the Chrome window and log in with your account.
+Navigate to https://app.heypocket.com and log in.
 
-### Step 3: Extract Token
+### 3. Extract Token
 
 ```bash
-python3 ~/.claude/skills/heypocket-reader/scripts/reader.py extract
+python3 scripts/reader.py extract
 ```
 
-The token is saved to `~/.pocket_token.json` and expires in 1 hour. Re-run the extract command when it expires.
+Token saved to `~/.pocket_token.json`. Expires in 1 hour.
 
 ## Usage
-
-### CLI
-
-```bash
-# List recent recordings
-python3 scripts/reader.py
-
-# List recordings from last 7 days
-python3 scripts/reader.py 7
-```
-
-### Python
 
 ```python
 from reader import get_recordings, get_recording_full, search_recordings
 
 # List recordings
-recordings = get_recordings(days=30, limit=20)
-for r in recordings:
-    print(f"{r.recorded_at:%Y-%m-%d} | {r.duration_str} | {r.title}")
+for r in get_recordings(days=30):
+    print(f"{r.recorded_at:%Y-%m-%d} | {r.title}")
 
-# Get full transcript and summary
+# Get full data
 full = get_recording_full(recording_id)
-print(full['transcript'])   # Raw text (50k+ chars)
-print(full['summary'])      # Markdown summary
-print(full['action_items']) # List of action items
+full['transcript']    # Raw text
+full['summary']       # Markdown
+full['action_items']  # List
+full['speakers']      # Dict with speaker profiles (names, IDs)
 
-# Search
-results = search_recordings("meeting")
+# Search by text
+search_recordings(query="meeting")
+
+# Search by location
+search_recordings(lat=51.51, lon=-0.13, radius_km=5)
+
+# Combined
+search_recordings(query="AI", lat=51.51, lon=-0.13, radius_km=50)
 ```
 
 ## API Reference
@@ -112,23 +90,29 @@ results = search_recordings("meeting")
 |----------|-------------|
 | `get_recordings(days, limit)` | List recent recordings |
 | `get_recording_full(id)` | Get transcript + summary + action items + speakers |
-| `get_transcript(id)` | Get raw transcript text |
-| `get_summarization(id)` | Get markdown summary |
-| `search_recordings(query, days, limit)` | Search recordings by text |
+| `search_recordings(query, lat, lon, radius_km)` | Search by text and/or location |
+
+## Transcript Search
+
+Full-text transcript search requires fetching each recording (1 API call each). Not built-in, but easy to implement:
+
+```python
+for r in get_recordings(days=30):
+    full = get_recording_full(r.id)
+    if "search term" in full['transcript'].lower():
+        print(f"Found in: {r.title}")
+```
 
 ## Technical Details
 
 - **API Base**: `https://production.heypocketai.com/api/v1`
 - **Auth**: Firebase Bearer token from browser IndexedDB
-- **Token Expiry**: 1 hour (Firebase default)
-- **Key Parameter**: `?include=all` to get transcript and summary
-
-This skill was created by reverse-engineering the Pocket web app at `app.heypocket.com`.
+- **Token Expiry**: 1 hour
 
 ## License
 
-MIT License - See [LICENSE](LICENSE) for details.
+MIT License
 
 ## Disclaimer
 
-This is an unofficial integration. Use at your own risk. Not affiliated with or endorsed by Pocket/Open Vision Engineering Inc.
+Unofficial integration. Not affiliated with Pocket/Open Vision Engineering Inc.
