@@ -31,28 +31,48 @@ git clone https://github.com/tmustier/heypocket-reader.git ~/.claude/skills/heyp
 ### Prerequisites
 
 1. A Pocket account with recordings
-2. Browser automation capability (Chrome DevTools Protocol)
-3. Chrome browser
+2. Chrome browser
+3. A way to start Chrome with remote debugging (see examples below)
 
-### Authentication
+### Step 1: Start Chrome with Remote Debugging
 
-Pocket uses Firebase authentication. To extract your token:
+Choose one of these methods:
 
-1. Start Chrome with remote debugging enabled (port 9222) and your user profile
-2. Navigate to https://app.heypocket.com and log in
-3. Run the token extraction:
-   ```bash
-   python3 ~/.claude/skills/heypocket-reader/scripts/reader.py extract
-   ```
+**Manual (macOS):**
+```bash
+/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
+  --remote-debugging-port=9222 \
+  --user-data-dir="$HOME/chrome-debug-profile"
+```
 
-The token is saved to `~/.pocket_token.json` and expires in 1 hour.
+**Manual (Linux):**
+```bash
+google-chrome --remote-debugging-port=9222 --user-data-dir="$HOME/chrome-debug-profile"
+```
 
-#### Browser Automation Note
+**Using Puppeteer:**
+```bash
+npx puppeteer browsers install chrome
+node -e "require('puppeteer').launch({headless: false, args: ['--remote-debugging-port=9222']})"
+```
 
-The `extract` command requires a browser automation tool that can evaluate JavaScript in Chrome via CDP (Chrome DevTools Protocol). If you have a browser skill installed, use it to:
-1. Start Chrome with `--remote-debugging-port=9222` and your profile
-2. Navigate to app.heypocket.com
-3. Then run the extract command
+**Using Playwright:**
+```bash
+npx playwright install chromium
+npx playwright open --remote-debugging-port=9222 https://app.heypocket.com
+```
+
+### Step 2: Log into Pocket
+
+Navigate to https://app.heypocket.com in the Chrome window and log in with your account.
+
+### Step 3: Extract Token
+
+```bash
+python3 ~/.claude/skills/heypocket-reader/scripts/reader.py extract
+```
+
+The token is saved to `~/.pocket_token.json` and expires in 1 hour. Re-run the extract command when it expires.
 
 ## Usage
 
@@ -78,8 +98,9 @@ for r in recordings:
 
 # Get full transcript and summary
 full = get_recording_full(recording_id)
-print(full['transcript'])  # Raw text
-print(full['summary'])     # Markdown
+print(full['transcript'])   # Raw text (50k+ chars)
+print(full['summary'])      # Markdown summary
+print(full['action_items']) # List of action items
 
 # Search
 results = search_recordings("meeting")
@@ -100,6 +121,7 @@ results = search_recordings("meeting")
 - **API Base**: `https://production.heypocketai.com/api/v1`
 - **Auth**: Firebase Bearer token from browser IndexedDB
 - **Token Expiry**: 1 hour (Firebase default)
+- **Key Parameter**: `?include=all` to get transcript and summary
 
 This skill was created by reverse-engineering the Pocket web app at `app.heypocket.com`.
 
