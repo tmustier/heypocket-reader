@@ -13,7 +13,7 @@ Access Pocket AI recordings via reverse-engineered API.
 |----------|-------------|
 | `get_recordings(days, limit)` | List recent recordings |
 | `get_recording_full(id)` | Get transcript + summary + action items + speakers |
-| `search_recordings(query, lat, lon, radius_km)` | Search by title/description/tags and/or location |
+| `search_recordings(query, lat, lon, radius_km, days=90)` | Search by title/description/tags and/or location |
 
 ## Setup
 
@@ -62,6 +62,6 @@ for r in get_recordings(days=30):
 
 ## Data
 
-**PocketRecording**: `id`, `title`, `description`, `duration`, `recorded_at`, `num_speakers`, `latitude`, `longitude`, `tags`
+**PocketRecording**: `id`, `title`, `description`, `duration`, `duration_str`, `recorded_at`, `num_speakers`, `latitude`, `longitude`, `tags`
 
 **get_recording_full()**: Returns `recording`, `transcript`, `summary`, `action_items`, `speakers`
