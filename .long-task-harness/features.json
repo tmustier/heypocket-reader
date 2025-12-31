@@ -1,0 +1,58 @@
+{
+  "version": "2.0",
+  "description": "Feature checklist with history tracking for session continuity",
+  "metadata": {
+    "project_name": "Your Project Name",
+    "created": "YYYY-MM-DD",
+    "last_updated": "YYYY-MM-DD",
+    "total_features": 0,
+    "completed_features": 0
+  },
+  "features": [
+    {
+      "id": "setup-001",
+      "name": "Project initialization",
+      "description": "Basic project structure is in place with all dependencies installed",
+      "steps": [
+        "Project directory exists with proper structure",
+        "All dependencies are installed and importable",
+        "Basic configuration files are present",
+        "Project runs without errors"
+      ],
+      "passes": false,
+      "notes": "",
+      "history": {
+        "sessions": [],
+        "files": [],
+        "decisions": []
+      }
+    },
+    {
+      "id": "example-001",
+      "name": "Example feature (replace this)",
+      "description": "This is an example feature - replace with your actual features",
+      "steps": [
+        "Step 1: What to do first",
+        "Step 2: What to do second",
+        "Step 3: How to verify it works"
+      ],
+      "passes": false,
+      "notes": "Delete this example and add your real features",
+      "history": {
+        "sessions": [
+          {"session": 3, "date": "2024-12-15", "action": "started", "summary": "Initial implementation attempt"},
+          {"session": 5, "date": "2024-12-17", "action": "completed", "summary": "Fixed edge cases, all tests pass"}
+        ],
+        "files": [
+          "src/example/handler.ts",
+          "src/example/types.ts",
+          "tests/example.test.ts"
+        ],
+        "decisions": [
+          {"session": 3, "decision": "Use strategy pattern for extensibility"},
+          {"session": 5, "decision": "Added caching layer for performance"}
+        ]
+      }
+    }
+  ]
+}
