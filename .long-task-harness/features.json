@@ -1,58 +1,47 @@
 {
-  "version": "2.0",
-  "description": "Feature checklist with history tracking for session continuity",
-  "metadata": {
-    "project_name": "Your Project Name",
-    "created": "YYYY-MM-DD",
-    "last_updated": "YYYY-MM-DD",
-    "total_features": 0,
-    "completed_features": 0
-  },
+  "project": "heypocket-reader skill testing & fixes",
   "features": [
     {
-      "id": "setup-001",
-      "name": "Project initialization",
-      "description": "Basic project structure is in place with all dependencies installed",
-      "steps": [
-        "Project directory exists with proper structure",
-        "All dependencies are installed and importable",
-        "Basic configuration files are present",
-        "Project runs without errors"
-      ],
-      "passes": false,
-      "notes": "",
-      "history": {
-        "sessions": [],
-        "files": [],
-        "decisions": []
-      }
+      "id": "test-001",
+      "name": "Token management",
+      "description": "Test token extraction, caching, and expiry handling",
+      "status": "passed",
+      "tests": ["Token cache read/write", "Expiry detection", "Extract from browser"]
     },
     {
-      "id": "example-001",
-      "name": "Example feature (replace this)",
-      "description": "This is an example feature - replace with your actual features",
-      "steps": [
-        "Step 1: What to do first",
-        "Step 2: What to do second",
-        "Step 3: How to verify it works"
-      ],
-      "passes": false,
-      "notes": "Delete this example and add your real features",
-      "history": {
-        "sessions": [
-          {"session": 3, "date": "2024-12-15", "action": "started", "summary": "Initial implementation attempt"},
-          {"session": 5, "date": "2024-12-17", "action": "completed", "summary": "Fixed edge cases, all tests pass"}
-        ],
-        "files": [
-          "src/example/handler.ts",
-          "src/example/types.ts",
-          "tests/example.test.ts"
-        ],
-        "decisions": [
-          {"session": 3, "decision": "Use strategy pattern for extensibility"},
-          {"session": 5, "decision": "Added caching layer for performance"}
-        ]
-      }
+      "id": "test-002",
+      "name": "List recordings",
+      "description": "Test get_recordings() with various parameters",
+      "status": "passed",
+      "tests": ["Default params", "Custom days", "Custom limit", "Empty results"]
+    },
+    {
+      "id": "test-003",
+      "name": "Get full recording",
+      "description": "Test get_recording_full() including transcript, summary, action items",
+      "status": "passed",
+      "tests": ["Full data retrieval", "Missing transcript", "Missing summary"]
+    },
+    {
+      "id": "test-004",
+      "name": "Search recordings",
+      "description": "Test search_recordings() with query and location filters",
+      "status": "passed",
+      "tests": ["Text query search", "Location search", "Combined search", "No results"]
+    },
+    {
+      "id": "test-005",
+      "name": "Error handling",
+      "description": "Test graceful handling of API errors, auth failures, network issues",
+      "status": "passed",
+      "tests": ["No token", "Invalid token", "API errors"]
+    },
+    {
+      "id": "test-006",
+      "name": "CLI interface",
+      "description": "Test command-line usage of reader.py",
+      "status": "passed",
+      "tests": ["List command", "Extract command", "Custom days argument", "set-token command"]
     }
   ]
 }

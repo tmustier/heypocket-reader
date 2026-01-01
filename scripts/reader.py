@@ -161,7 +161,8 @@ def get_recordings(days: int = 30, limit: int = 50, token: str = None) -> List[P
     }
     
     data = _api_request('/recordings', token, params)
-    return [PocketRecording.from_api(r) for r in data.get('data', [])]
+    recordings = [PocketRecording.from_api(r) for r in data.get('data', [])]
+    return recordings[:limit]  # Enforce limit client-side (API may return more)
 
 
 def get_recording_full(recording_id: str, token: str = None) -> dict:
@@ -316,80 +317,123 @@ def search_recordings(
 
 def extract_token_from_browser() -> Optional[str]:
     """
-    Extract Firebase token from Chrome browser.
+    Extract Firebase token using Playwright.
     
-    Requires Chrome running with remote debugging on port 9222,
-    logged into app.heypocket.com.
+    Opens browser to app.heypocket.com, waits for login if needed,
+    then extracts token from IndexedDB.
     """
-    js_code = '''(async () => {
-        const idbRequest = indexedDB.open("firebaseLocalStorageDb");
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        print("Playwright not installed. Run: python3 -m pip install playwright && python3 -m playwright install chromium")
+        return None
+    
+    import time
+    
+    js_code = '''() => {
         return new Promise((resolve) => {
+            const idbRequest = indexedDB.open("firebaseLocalStorageDb");
             idbRequest.onsuccess = () => {
                 const db = idbRequest.result;
                 const tx = db.transaction("firebaseLocalStorage", "readonly");
                 const store = tx.objectStore("firebaseLocalStorage");
                 const getAll = store.getAll();
                 getAll.onsuccess = () => {
-                    const item = getAll.result[0];
-                    if(item && item.value && item.value.stsTokenManager) {
-                        const tm = item.value.stsTokenManager;
-                        resolve(JSON.stringify({
-                            accessToken: tm.accessToken,
-                            refreshToken: tm.refreshToken,
-                            expirationTime: tm.expirationTime
-                        }));
-                    } else {
-                        resolve(JSON.stringify({error: "No token found"}));
+                    for (const item of getAll.result) {
+                        if (item?.value?.stsTokenManager?.accessToken) {
+                            const tm = item.value.stsTokenManager;
+                            resolve({
+                                accessToken: tm.accessToken,
+                                refreshToken: tm.refreshToken,
+                                expirationTime: tm.expirationTime
+                            });
+                            return;
+                        }
                     }
+                    resolve({error: "No token found in IndexedDB"});
                 };
+                getAll.onerror = () => resolve({error: "Failed to read IndexedDB"});
             };
+            idbRequest.onerror = () => resolve({error: "Failed to open IndexedDB"});
         });
-    })()'''
+    }'''
     
-    browser_eval = Path.home() / '.factory/skills/browser/eval.js'
-    if not browser_eval.exists():
-        browser_eval = Path.home() / '.claude/skills/browser/eval.js'
+    # Use persistent profile so login is remembered
+    profile_dir = Path.home() / '.pocket_browser_profile'
     
-    if not browser_eval.exists():
-        print("Browser skill not found. Install from: github.com/anthropics/skills")
-        return None
-    
-    try:
-        result = subprocess.run(
-            [str(browser_eval), js_code],
-            capture_output=True, text=True, timeout=30
+    print("Launching browser...")
+    with sync_playwright() as p:
+        context = p.chromium.launch_persistent_context(
+            str(profile_dir),
+            headless=False,
+            viewport={'width': 1280, 'height': 800}
         )
+        page = context.pages[0] if context.pages else context.new_page()
         
-        if result.returncode == 0:
-            data = json.loads(result.stdout.strip())
-            if 'accessToken' in data:
-                save_token(data['accessToken'], data.get('refreshToken'), expires_in=3600)
-                return data['accessToken']
+        print("Navigating to app.heypocket.com...")
+        page.goto("https://app.heypocket.com", wait_until="networkidle")
+        
+        # Check if we need to login - poll instead of wait_for_function
+        if "/login" in page.url.lower() or "/sign" in page.url.lower():
+            print("\n⚠️  Please log in to Pocket in the browser window.")
+            print("   Waiting for login to complete (up to 5 minutes)...")
+            for _ in range(60):  # 5 minutes, checking every 5 seconds
+                time.sleep(5)
+                current_url = page.url
+                if "/login" not in current_url and "/sign" not in current_url:
+                    print("   Login detected! Extracting token...")
+                    time.sleep(3)  # Let IndexedDB populate
+                    break
             else:
-                print(f"Token extraction failed: {data.get('error', 'unknown error')}")
+                print("   Timeout waiting for login.")
+                context.close()
+                return None
+        
+        # Extract token from IndexedDB
+        data = page.evaluate(js_code)
+        context.close()
+        
+        if 'accessToken' in data:
+            save_token(data['accessToken'], data.get('refreshToken'), expires_in=3600)
+            return data['accessToken']
         else:
-            print(f"Browser eval failed: {result.stderr}")
-    except Exception as e:
-        print(f"Token extraction error: {e}")
-    
-    return None
+            print(f"Token extraction failed: {data.get('error', 'unknown error')}")
+            return None
 
 
 if __name__ == '__main__':
     if len(sys.argv) > 1 and sys.argv[1] == 'extract':
         print("Extracting token from browser...")
-        print("Requirements:")
-        print("  1. Chrome running with: browser/start.js --profile")
-        print("  2. Logged into app.heypocket.com")
+        print("(Browser will open - log in if prompted)")
         print()
         token = extract_token_from_browser()
         if token:
             print(f"Success! Token saved (first 50 chars: {token[:50]}...)")
+        else:
+            print("Failed to extract token.")
+            sys.exit(1)
+        sys.exit(0)
+    
+    if len(sys.argv) > 1 and sys.argv[1] == 'set-token':
+        if len(sys.argv) < 3:
+            print("Usage: python3 reader.py set-token <TOKEN>")
+            print()
+            print("To get the token:")
+            print("  1. Open https://app.heypocket.com in Chrome")
+            print("  2. Open DevTools (Cmd+Option+I)")
+            print("  3. Go to Network tab, refresh the page")
+            print("  4. Click any request to production.heypocketai.com")
+            print("  5. Copy the Bearer token from Authorization header")
+            sys.exit(1)
+        token = sys.argv[2]
+        save_token(token, expires_in=3600)
+        print(f"Token saved! (first 50 chars: {token[:50]}...)")
         sys.exit(0)
     
     token = get_token()
     if not token:
-        print("No token. Run: python3 reader.py extract")
+        print("No token. Run: python3 reader.py set-token <TOKEN>")
+        print("  or: python3 reader.py extract (requires browser skill)")
         sys.exit(1)
     
     days = int(sys.argv[1]) if len(sys.argv) > 1 else 30

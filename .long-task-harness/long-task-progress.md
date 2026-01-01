@@ -1,125 +1,40 @@
-# heypocket-reader - Progress Log
+# Long Task Progress: heypocket-reader Skill
 
 ## Project Overview
-
-**Started**: 2025-12-31
-**Status**: In Progress
-**Repository**: [Add git remote URL]
-
-### Project Goals
-
-[Describe what you're building and why]
-
-### Key Decisions
-
-[Document important architectural or design decisions - reference session numbers]
+Testing and fixing the heypocket-reader skill for accessing Pocket AI recordings.
 
 ---
 
-## Current State
-
-**Last Updated**: 2025-12-31
-
-### What's Working
-- [List functional features]
-
-### What's Not Working
-- [List known issues]
-
-### Blocked On
-- [List blockers]
-
----
-
-## Session Log
-
-### Session 1 | 2025-12-31 | Commits: [first..last]
-
-#### Metadata
-- **Features**: setup-001 (started)
-- **Files Changed**: 
-  - `package.json` (+15/-0) - initial dependencies
-  - `src/index.ts` (+45/-0) - entry point
-- **Commit Summary**: `init: project scaffold`, `feat: add base config`
+### Session 1 | 2025-12-31 | Commits: f8207c9..HEAD
 
 #### Goal
-Project initialization and setup
+Comprehensively test and fix the heypocket-reader skill.
 
 #### Accomplished
-- [x] Initialized long-task-harness structure
-- [x] Created initial feature list
-- [ ] [Incomplete task carried forward]
+- [x] Initialized long-task-harness for tracking
+- [x] Updated token extraction to use Playwright (removed dependency on dev-browser skill)
+- [x] Added `set-token` CLI command for manual token input
+- [x] Fixed `get_recordings()` limit parameter (was being ignored by API, now enforced client-side)
+- [x] Improved token extraction with persistent browser profile
+- [x] Updated SKILL.md with clearer setup instructions
+- [x] Ran comprehensive test suite - all 6 test categories pass:
+  - Token management ✓
+  - List recordings ✓
+  - Get full recording ✓
+  - Search recordings ✓
+  - Error handling ✓
+  - CLI interface ✓
 
 #### Decisions
-- **[D1]** Chose TypeScript over JavaScript for type safety
-- **[D2]** Using pnpm over npm for faster installs
+- **[D1]** Switched from dev-browser skill to direct Playwright - simpler, no external dependencies
+- **[D2]** Use persistent browser profile at `~/.pocket_browser_profile` so login state is remembered
+- **[D3]** Enforce limit client-side since API doesn't respect the limit parameter
 
-#### Context & Learnings
-[What you learned, gotchas encountered, why things were done a certain way]
-
-#### Next Steps
-1. [First priority] → likely affects: feature-001
-2. [Second priority]
-
----
-
-<!--
-=============================================================================
-SESSION TEMPLATE - Copy below this line for new sessions
-=============================================================================
-
-### Session N | YYYY-MM-DD | Commits: abc123..def456
-
-#### Metadata
-- **Features**: feature-id (started|progressed|completed|blocked)
-- **Files Changed**: 
-  - `path/to/file.ts` (+lines/-lines) - brief description
-- **Commit Summary**: `type: message`, `type: message`
-
-#### Goal
-[One-liner: what you're trying to accomplish this session]
-
-#### Accomplished
-- [x] Completed task
-- [ ] Incomplete task (carried forward)
-
-#### Decisions
-- **[DN]** Decision made and rationale (reference in features.json)
-
-#### Context & Learnings
-[What you learned, gotchas, context future sessions need to know.
-Focus on WHAT and WHY, not the struggle/errors along the way.]
+#### Surprises
+- **[S1]** The Pocket API ignores the `limit` parameter and returns all matching recordings - had to slice client-side
+- **[S2]** Playwright uses a separate browser profile from regular Chrome, so existing Chrome logins don't transfer
+- **[S3]** Token expires in ~1 hour (Firebase default) - need to re-extract frequently
 
 #### Next Steps
-1. [Priority 1] → likely affects: feature-id
-2. [Priority 2]
-
-=============================================================================
-GUIDELINES FOR GOOD SESSION ENTRIES
-=============================================================================
-
-1. METADATA is for machines (subagent lookup)
-   - Always list features touched with status
-   - Always list files with change magnitude
-   - Always include commit range or hashes
-
-2. DECISIONS are for continuity
-   - Number them [D1], [D2] so they can be referenced
-   - Copy key decisions to features.json history
-   - Include rationale, not just the choice
-
-3. CONTEXT is for future you/agents
-   - Capture the WHY behind non-obvious choices
-   - Note gotchas and edge cases discovered
-   - Omit error-correction loops - just document resolution
-
-4. COMMIT SUMMARY style
-   - Use conventional commits: feat|fix|refactor|test|docs|chore
-   - Keep to one-liners that scan quickly
-
-5. Keep sessions BOUNDED
-   - One session = one work period (not one feature)
-   - If session runs long, split into multiple entries
-   - Target: scannable in <30 seconds
-
--->
+1. Push changes to git
+2. Consider adding token refresh functionality using refresh_token

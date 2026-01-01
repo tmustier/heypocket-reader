@@ -17,11 +17,21 @@ Access Pocket AI recordings via reverse-engineered API.
 
 ## Setup
 
-1. Start Chrome: `--remote-debugging-port=9222` with your profile
-2. Log into https://app.heypocket.com
-3. Extract token: `python3 scripts/reader.py extract`
+### Automated (recommended)
+```bash
+python3 scripts/reader.py extract
+```
+Opens browser, waits for login if needed, extracts token automatically.
+Requires: `pip install playwright && playwright install chromium`
 
-Token expires in 1 hour. Re-run extract when needed.
+### Manual
+1. Open https://app.heypocket.com in Chrome and log in
+2. Open DevTools (Cmd+Option+I) → Network tab
+3. Refresh page, click any request to `production.heypocketai.com`
+4. Copy Bearer token from Authorization header
+5. Run: `python3 scripts/reader.py set-token <TOKEN>`
+
+Token expires in ~1 hour. Re-run when needed.
 
 ## Usage
 
