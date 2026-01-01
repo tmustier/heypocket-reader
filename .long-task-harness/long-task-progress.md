@@ -36,5 +36,32 @@ Comprehensively test and fix the heypocket-reader skill.
 - **[S3]** Token expires in ~1 hour (Firebase default) - need to re-extract frequently
 
 #### Next Steps
-1. Push changes to git
+1. ~~Push changes to git~~ ✓
 2. Consider adding token refresh functionality using refresh_token
+
+---
+
+### Session 2 | 2025-12-31 | Commits: 13fa9fb..HEAD
+
+#### Goal
+Add strict typing with pyright.
+
+#### Accomplished
+- [x] Set up pyright strict mode (121 errors initially)
+- [x] Added proper type annotations throughout
+- [x] Created `ApiDict` type alias for API response data
+- [x] Added `RecordingFull` dataclass for better return types
+- [x] Fixed all 121 pyright errors → 0 errors
+- [x] All functional tests still pass
+
+#### Decisions
+- **[D1]** Used `cast()` for API response tag extraction - acceptable for external JSON data
+- **[D2]** Changed `get_recording_full` to return `RecordingFull` dataclass instead of dict for type safety
+- **[D3]** Used `lambda: []` for dataclass default_factory to satisfy pyright's generic inference
+
+#### Surprises
+- **[S1]** `field(default_factory=list)` triggers unknown type error - pyright can't infer element type from bare `list`
+- **[S2]** `Any` in union types propagates as `Unknown` in strict mode - need explicit narrowing or casts
+
+#### Next Steps
+1. Commit and push typing changes

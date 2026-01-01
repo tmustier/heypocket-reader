@@ -7,23 +7,44 @@ API Base: https://production.heypocketai.com/api/v1
 Auth: Firebase Bearer token extracted from browser
 
 Usage:
-    # Extract token (requires Chrome with --profile, logged into app.heypocket.com)
+    # Extract token (requires Playwright, logged into app.heypocket.com)
     python3 reader.py extract
     
     # List recordings
     python3 reader.py [days]
 """
+from __future__ import annotations
 
 import json
-import subprocess
 import sys
-from dataclasses import dataclass
+import time
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import Optional, List
 from pathlib import Path
+from typing import Any, cast
 
 API_BASE = "https://production.heypocketai.com/api/v1"
 TOKEN_CACHE_FILE = Path.home() / ".pocket_token.json"
+
+# Type alias for API response data
+ApiDict = dict[str, Any]
+
+
+def _extract_tags(raw: object) -> list[str]:
+    """Extract tag names from API response.
+    
+    The API returns tags as list[{name: str, ...}].
+    We safely extract the name field from each tag dict.
+    """
+    result: list[str] = []
+    if not isinstance(raw, list):
+        return result
+    # Cast the validated list to work with it
+    tag_list = cast(list[dict[str, object]], raw)
+    for tag in tag_list:
+        name = tag.get('name', '')
+        result.append(str(name) if name else '')
+    return result
 
 
 @dataclass
@@ -33,36 +54,39 @@ class PocketRecording:
     title: str
     description: str
     duration: int
-    recorded_at: datetime
-    created_at: datetime
+    recorded_at: datetime | None
+    created_at: datetime | None
     has_transcription: bool
     has_summarization: bool
     transcription_status: str
     summarization_status: str
     num_speakers: int
-    latitude: Optional[float] = None
-    longitude: Optional[float] = None
-    tags: List[str] = None
-    folder_id: Optional[str] = None
+    latitude: float | None = None
+    longitude: float | None = None
+    tags: list[str] = field(default_factory=lambda: [])
+    folder_id: str | None = None
     
     @classmethod
-    def from_api(cls, data: dict) -> 'PocketRecording':
+    def from_api(cls, data: ApiDict) -> PocketRecording:
+        raw_tags: object = data.get('tags', [])
+        tags = _extract_tags(raw_tags)
+        
         return cls(
-            id=data['id'],
-            title=data.get('title', 'Untitled'),
-            description=data.get('description', ''),
-            duration=data.get('duration', 0) or 0,
+            id=str(data.get('id', '')),
+            title=str(data.get('title', 'Untitled')),
+            description=str(data.get('description', '')),
+            duration=int(data.get('duration', 0) or 0),
             recorded_at=_parse_datetime(data.get('recordingAt')),
             created_at=_parse_datetime(data.get('createdAt')),
-            has_transcription=data.get('hasTranscription', False),
-            has_summarization=data.get('hasSummarization', False),
-            transcription_status=data.get('transcriptionStatus', 'unknown'),
-            summarization_status=data.get('summarizationStatus', 'unknown'),
+            has_transcription=bool(data.get('hasTranscription', False)),
+            has_summarization=bool(data.get('hasSummarization', False)),
+            transcription_status=str(data.get('transcriptionStatus', 'unknown')),
+            summarization_status=str(data.get('summarizationStatus', 'unknown')),
             num_speakers=int(data.get('numOfSpeakers', 0) or 0),
-            latitude=data.get('latitude'),
-            longitude=data.get('longitude'),
-            tags=[t.get('name', '') for t in data.get('tags', [])],
-            folder_id=data.get('folderId'),
+            latitude=_to_optional_float(data.get('latitude')),
+            longitude=_to_optional_float(data.get('longitude')),
+            tags=tags,
+            folder_id=_to_optional_str(data.get('folderId')),
         )
     
     @property
@@ -83,13 +107,31 @@ class PocketSummarization:
     id: str
     recording_id: str
     summary: str
-    action_items: List[dict]
-    transcript: Optional[str] = None
-    created_at: Optional[datetime] = None
+    action_items: list[ApiDict]
+    transcript: str | None = None
+    created_at: datetime | None = None
 
 
-def _parse_datetime(dt_str: Optional[str]) -> Optional[datetime]:
-    if not dt_str:
+def _to_optional_float(value: Any) -> float | None:
+    """Safely convert a value to Optional[float]."""
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _to_optional_str(value: Any) -> str | None:
+    """Safely convert a value to Optional[str]."""
+    if value is None:
+        return None
+    return str(value)
+
+
+def _parse_datetime(dt_str: Any) -> datetime | None:
+    """Parse datetime from API response."""
+    if dt_str is None or not isinstance(dt_str, str):
         return None
     try:
         for fmt in ["%Y-%m-%d %H:%M:%S.%f", "%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S.%fZ"]:
@@ -98,25 +140,32 @@ def _parse_datetime(dt_str: Optional[str]) -> Optional[datetime]:
             except ValueError:
                 continue
         return datetime.fromisoformat(dt_str.replace('Z', '+00:00'))
-    except:
+    except (ValueError, TypeError):
         return None
 
 
-def get_token() -> Optional[str]:
+def get_token() -> str | None:
     """Get Firebase token from cache file."""
     if TOKEN_CACHE_FILE.exists():
         try:
-            data = json.loads(TOKEN_CACHE_FILE.read_text())
-            if data.get('expires_at', 0) > datetime.now().timestamp():
-                return data.get('access_token')
-        except:
+            data: ApiDict = json.loads(TOKEN_CACHE_FILE.read_text())
+            expires_at = data.get('expires_at', 0)
+            if isinstance(expires_at, (int, float)) and expires_at > datetime.now().timestamp():
+                token = data.get('access_token')
+                if isinstance(token, str):
+                    return token
+        except (json.JSONDecodeError, OSError):
             pass
     return None
 
 
-def save_token(access_token: str, refresh_token: str = None, expires_in: int = 3600):
+def save_token(
+    access_token: str,
+    refresh_token: str | None = None,
+    expires_in: int = 3600
+) -> None:
     """Save token to cache file."""
-    data = {
+    data: ApiDict = {
         'access_token': access_token,
         'refresh_token': refresh_token,
         'expires_at': (datetime.now() + timedelta(seconds=expires_in)).timestamp()
@@ -125,7 +174,11 @@ def save_token(access_token: str, refresh_token: str = None, expires_in: int = 3
     print(f"Token saved to {TOKEN_CACHE_FILE}")
 
 
-def _api_request(endpoint: str, token: str, params: dict = None) -> dict:
+def _api_request(
+    endpoint: str,
+    token: str,
+    params: dict[str, str | int] | None = None
+) -> ApiDict:
     """Make authenticated API request."""
     import urllib.request
     import urllib.parse
@@ -140,19 +193,24 @@ def _api_request(endpoint: str, token: str, params: dict = None) -> dict:
     
     try:
         with urllib.request.urlopen(req, timeout=30) as response:
-            return json.loads(response.read().decode())
+            result: ApiDict = json.loads(response.read().decode())
+            return result
     except Exception as e:
-        raise Exception(f"API error: {e}")
+        raise Exception(f"API error: {e}") from e
 
 
-def get_recordings(days: int = 30, limit: int = 50, token: str = None) -> List[PocketRecording]:
+def get_recordings(
+    days: int = 30,
+    limit: int = 50,
+    token: str | None = None
+) -> list[PocketRecording]:
     """Get recent recordings."""
-    token = token or get_token()
-    if not token:
+    resolved_token = token or get_token()
+    if not resolved_token:
         raise Exception("No token. Run: python3 reader.py extract")
     
     start_date = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
-    params = {
+    params: dict[str, str | int] = {
         'limit': limit,
         'include_empty': 'false',
         'sort_by': 'recording_at',
@@ -160,65 +218,107 @@ def get_recordings(days: int = 30, limit: int = 50, token: str = None) -> List[P
         'start_date': start_date,
     }
     
-    data = _api_request('/recordings', token, params)
-    recordings = [PocketRecording.from_api(r) for r in data.get('data', [])]
+    data = _api_request('/recordings', resolved_token, params)
+    raw_recordings: list[ApiDict] = data.get('data', [])
+    recordings = [PocketRecording.from_api(r) for r in raw_recordings]
     return recordings[:limit]  # Enforce limit client-side (API may return more)
 
 
-def get_recording_full(recording_id: str, token: str = None) -> dict:
+@dataclass
+class RecordingFull:
+    """Full recording data including transcript and summary."""
+    recording: PocketRecording
+    transcript: str
+    summary: str
+    action_items: list[ApiDict]
+    speakers: list[ApiDict]
+
+
+def get_recording_full(
+    recording_id: str,
+    token: str | None = None
+) -> RecordingFull:
     """Get recording with transcript, summary, and action items."""
-    token = token or get_token()
-    if not token:
+    resolved_token = token or get_token()
+    if not resolved_token:
         raise Exception("No token available.")
     
-    data = _api_request(f'/recordings/{recording_id}', token, {'include': 'all'})
+    data = _api_request(
+        f'/recordings/{recording_id}',
+        resolved_token,
+        {'include': 'all'}
+    )
     
-    recording = PocketRecording.from_api(data.get('recording', {}))
+    recording_data: ApiDict = data.get('recording', {})
+    recording = PocketRecording.from_api(recording_data)
     
-    transcription = data.get('transcription', {})
-    transcript = transcription.get('transcription', {}).get('text', '') if transcription else ''
+    transcription: ApiDict = data.get('transcription', {})
+    transcript = ''
+    if transcription:
+        inner_transcription: ApiDict = transcription.get('transcription', {})
+        transcript = str(inner_transcription.get('text', ''))
     
-    summarizations = data.get('summarizations', {})
+    summarizations: ApiDict = data.get('summarizations', {})
     summary = ''
-    action_items = []
+    action_items: list[ApiDict] = []
     if summarizations:
         first_key = next(iter(summarizations.keys()), None)
         if first_key:
-            v2 = summarizations[first_key].get('v2', {})
-            summary = v2.get('summary', {}).get('markdown', '')
-            action_items = v2.get('actionItems', {}).get('items', [])
+            summ_data: ApiDict = summarizations[first_key]
+            v2: ApiDict = summ_data.get('v2', {})
+            summary_data: ApiDict = v2.get('summary', {})
+            summary = str(summary_data.get('markdown', ''))
+            action_items_data: ApiDict = v2.get('actionItems', {})
+            action_items = list(action_items_data.get('items', []))
     
-    return {
-        'recording': recording,
-        'transcript': transcript,
-        'summary': summary,
-        'action_items': action_items,
-        'speakers': data.get('speakers', []),
-    }
+    speakers: list[ApiDict] = data.get('speakers', [])
+    
+    return RecordingFull(
+        recording=recording,
+        transcript=transcript,
+        summary=summary,
+        action_items=action_items,
+        speakers=speakers,
+    )
 
 
-def get_transcript(recording_id: str, token: str = None) -> Optional[str]:
+def get_transcript(recording_id: str, token: str | None = None) -> str | None:
     """Get raw transcript text."""
-    token = token or get_token()
-    if not token:
+    resolved_token = token or get_token()
+    if not resolved_token:
         raise Exception("No token available.")
     
-    data = _api_request(f'/recordings/{recording_id}', token, {'include': 'all'})
-    transcription = data.get('transcription', {})
+    data = _api_request(
+        f'/recordings/{recording_id}',
+        resolved_token,
+        {'include': 'all'}
+    )
+    transcription: ApiDict = data.get('transcription', {})
     if not transcription:
         return None
-    return transcription.get('transcription', {}).get('text', None)
+    inner: ApiDict = transcription.get('transcription', {})
+    text = inner.get('text')
+    if text is None:
+        return None
+    return str(text)
 
 
-def get_summarization(recording_id: str, token: str = None) -> Optional[PocketSummarization]:
+def get_summarization(
+    recording_id: str,
+    token: str | None = None
+) -> PocketSummarization | None:
     """Get summary for a recording."""
-    token = token or get_token()
-    if not token:
+    resolved_token = token or get_token()
+    if not resolved_token:
         raise Exception("No token available.")
     
-    data = _api_request(f'/recordings/{recording_id}', token, {'include': 'all'})
+    data = _api_request(
+        f'/recordings/{recording_id}',
+        resolved_token,
+        {'include': 'all'}
+    )
     
-    summarizations = data.get('summarizations', {})
+    summarizations: ApiDict = data.get('summarizations', {})
     if not summarizations:
         return None
     
@@ -226,14 +326,16 @@ def get_summarization(recording_id: str, token: str = None) -> Optional[PocketSu
     if not first_key:
         return None
     
-    summ = summarizations[first_key]
-    v2 = summ.get('v2', {})
+    summ: ApiDict = summarizations[first_key]
+    v2: ApiDict = summ.get('v2', {})
+    summary_data: ApiDict = v2.get('summary', {})
+    action_items_data: ApiDict = v2.get('actionItems', {})
     
     return PocketSummarization(
-        id=summ.get('id', ''),
+        id=str(summ.get('id', '')),
         recording_id=recording_id,
-        summary=v2.get('summary', {}).get('markdown', ''),
-        action_items=v2.get('actionItems', {}).get('items', []),
+        summary=str(summary_data.get('markdown', '')),
+        action_items=list(action_items_data.get('items', [])),
         transcript=None,
         created_at=None,
     )
@@ -243,22 +345,22 @@ def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """Calculate distance in km between two lat/lon points."""
     from math import radians, sin, cos, sqrt, atan2
     R = 6371  # Earth radius in km
-    lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
-    dlat = lat2 - lat1
-    dlon = lon2 - lon1
-    a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
+    rlat1, rlon1, rlat2, rlon2 = map(radians, [lat1, lon1, lat2, lon2])
+    dlat = rlat2 - rlat1
+    dlon = rlon2 - rlon1
+    a = sin(dlat/2)**2 + cos(rlat1) * cos(rlat2) * sin(dlon/2)**2
     return R * 2 * atan2(sqrt(a), sqrt(1-a))
 
 
 def search_recordings(
-    query: str = None,
+    query: str | None = None,
     days: int = 90,
     limit: int = 20,
-    lat: float = None,
-    lon: float = None,
+    lat: float | None = None,
+    lon: float | None = None,
     radius_km: float = 1.0,
-    token: str = None
-) -> List[PocketRecording]:
+    token: str | None = None
+) -> list[PocketRecording]:
     """
     Search recordings with client-side filtering.
     
@@ -273,38 +375,39 @@ def search_recordings(
         lat/lon: Filter by location (requires both)
         radius_km: Radius for location filter (default 1km)
     """
-    token = token or get_token()
-    if not token:
+    resolved_token = token or get_token()
+    if not resolved_token:
         raise Exception("No token available.")
     
-    if not query and not (lat and lon):
+    if not query and not (lat is not None and lon is not None):
         raise ValueError("Provide query and/or lat+lon")
     
     start_date = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
-    params = {
+    params: dict[str, str | int] = {
         'limit': 100,
         'start_date': start_date,
         'sort_by': 'recording_at',
         'sort_order': 'desc',
     }
     
-    data = _api_request('/recordings', token, params)
-    all_recordings = [PocketRecording.from_api(r) for r in data.get('data', [])]
+    data = _api_request('/recordings', resolved_token, params)
+    raw_recordings: list[ApiDict] = data.get('data', [])
+    all_recordings = [PocketRecording.from_api(r) for r in raw_recordings]
     
     query_lower = query.lower() if query else None
-    matches = []
+    matches: list[PocketRecording] = []
     
     for r in all_recordings:
         # Location filter
-        if lat and lon:
-            if not (r.latitude and r.longitude):
+        if lat is not None and lon is not None:
+            if r.latitude is None or r.longitude is None:
                 continue
             if _haversine_km(lat, lon, r.latitude, r.longitude) > radius_km:
                 continue
         
         # Text filter
         if query_lower:
-            searchable = f"{r.title} {r.description} {' '.join(r.tags or [])}".lower()
+            searchable = f"{r.title} {r.description} {' '.join(r.tags)}".lower()
             if query_lower not in searchable:
                 continue
         
@@ -315,7 +418,7 @@ def search_recordings(
     return matches
 
 
-def extract_token_from_browser() -> Optional[str]:
+def extract_token_from_browser() -> str | None:
     """
     Extract Firebase token using Playwright.
     
@@ -327,8 +430,6 @@ def extract_token_from_browser() -> Optional[str]:
     except ImportError:
         print("Playwright not installed. Run: python3 -m pip install playwright && python3 -m playwright install chromium")
         return None
-    
-    import time
     
     js_code = '''() => {
         return new Promise((resolve) => {
@@ -390,14 +491,21 @@ def extract_token_from_browser() -> Optional[str]:
                 return None
         
         # Extract token from IndexedDB
-        data = page.evaluate(js_code)
+        data: ApiDict = page.evaluate(js_code)
         context.close()
         
-        if 'accessToken' in data:
-            save_token(data['accessToken'], data.get('refreshToken'), expires_in=3600)
-            return data['accessToken']
+        access_token = data.get('accessToken')
+        if isinstance(access_token, str):
+            refresh_token = data.get('refreshToken')
+            save_token(
+                access_token,
+                str(refresh_token) if refresh_token else None,
+                expires_in=3600
+            )
+            return access_token
         else:
-            print(f"Token extraction failed: {data.get('error', 'unknown error')}")
+            error = data.get('error', 'unknown error')
+            print(f"Token extraction failed: {error}")
             return None
 
 
@@ -406,9 +514,9 @@ if __name__ == '__main__':
         print("Extracting token from browser...")
         print("(Browser will open - log in if prompted)")
         print()
-        token = extract_token_from_browser()
-        if token:
-            print(f"Success! Token saved (first 50 chars: {token[:50]}...)")
+        extracted_token = extract_token_from_browser()
+        if extracted_token:
+            print(f"Success! Token saved (first 50 chars: {extracted_token[:50]}...)")
         else:
             print("Failed to extract token.")
             sys.exit(1)
@@ -425,24 +533,24 @@ if __name__ == '__main__':
             print("  4. Click any request to production.heypocketai.com")
             print("  5. Copy the Bearer token from Authorization header")
             sys.exit(1)
-        token = sys.argv[2]
-        save_token(token, expires_in=3600)
-        print(f"Token saved! (first 50 chars: {token[:50]}...)")
+        cli_token = sys.argv[2]
+        save_token(cli_token, expires_in=3600)
+        print(f"Token saved! (first 50 chars: {cli_token[:50]}...)")
         sys.exit(0)
     
-    token = get_token()
-    if not token:
+    main_token = get_token()
+    if not main_token:
         print("No token. Run: python3 reader.py set-token <TOKEN>")
-        print("  or: python3 reader.py extract (requires browser skill)")
+        print("  or: python3 reader.py extract (requires Playwright)")
         sys.exit(1)
     
-    days = int(sys.argv[1]) if len(sys.argv) > 1 else 30
+    cli_days = int(sys.argv[1]) if len(sys.argv) > 1 else 30
     
-    print(f"=== Pocket Recordings (last {days} days) ===\n")
-    recordings = get_recordings(days=days, limit=20, token=token)
+    print(f"=== Pocket Recordings (last {cli_days} days) ===\n")
+    main_recordings = get_recordings(days=cli_days, limit=20, token=main_token)
     
-    for r in recordings:
-        date = r.recorded_at.strftime('%Y-%m-%d') if r.recorded_at else '?'
-        status = '✓' if r.has_summarization else '○'
-        speakers = f"({r.num_speakers}sp)" if r.num_speakers else ""
-        print(f"  {date} | {r.duration_str:>6} | {status} {r.title[:45]} {speakers}")
+    for rec in main_recordings:
+        date_str = rec.recorded_at.strftime('%Y-%m-%d') if rec.recorded_at else '?'
+        status = '✓' if rec.has_summarization else '○'
+        speakers = f"({rec.num_speakers}sp)" if rec.num_speakers else ""
+        print(f"  {date_str} | {rec.duration_str:>6} | {status} {rec.title[:45]} {speakers}")
